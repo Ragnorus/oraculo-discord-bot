@@ -17,6 +17,10 @@ from .storage import Storage
 LOGGER = logging.getLogger(__name__)
 
 
+class CommandInputError(RuntimeError):
+    pass
+
+
 QUEUE_CHOICES = [
     app_commands.Choice(name=payload["label"], value=key)
     for key, payload in QUEUE_FILTERS.items()
@@ -110,7 +114,7 @@ class OraculoCog(commands.Cog):
                 period=LeaderboardPeriod(period),
                 now=datetime.now(UTC),
             )
-        except RiotAPIError as error:
+        except (CommandInputError, RiotAPIError) as error:
             await interaction.followup.send(str(error))
             return
         label = LeaderboardPeriod(period).value
@@ -238,7 +242,7 @@ class OraculoCog(commands.Cog):
     ) -> RegisteredPlayer:
         assert interaction.guild_id is not None
         if bool(game_name) ^ bool(tag_line):
-            raise RiotAPIError("Provide both game_name and tag_line together, or omit both.")
+            raise CommandInputError("Provide both game_name and tag_line together, or omit both.")
         if game_name and tag_line:
             account = await self.bot.riot_client.resolve_account(game_name, tag_line)
             return RegisteredPlayer(
@@ -250,7 +254,7 @@ class OraculoCog(commands.Cog):
         stored = self.bot.storage.get_registration(interaction.guild_id, interaction.user.id)
         if stored:
             return stored
-        raise RiotAPIError("No default Riot account is registered. Use /leaderboard join or pass game_name and tag_line.")
+        raise CommandInputError("No default Riot account is registered. Use /leaderboard join or pass game_name and tag_line.")
 
 
 def main() -> None:

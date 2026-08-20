@@ -69,12 +69,14 @@ class Storage:
         payload = self.load()
         guild_entries = payload["registrations"].get(str(guild_id), {})
         removed = guild_entries.pop(str(discord_user_id), None)
+        if removed is None:
+            return False
         if guild_entries:
             payload["registrations"][str(guild_id)] = guild_entries
         else:
             payload["registrations"].pop(str(guild_id), None)
         self.save(payload)
-        return removed is not None
+        return True
 
     def list_registrations(self, guild_id: int) -> list[RegisteredPlayer]:
         payload = self.load()
