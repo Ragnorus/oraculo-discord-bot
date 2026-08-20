@@ -9,19 +9,12 @@ from discord.ext import commands, tasks
 
 from .config import BotSettings, load_settings
 from .leaderboard import LeaderboardService, render_leaderboard
-from .models import GuildConfig, LeaderboardPeriod, QUEUE_FILTERS, RegisteredPlayer
+from .models import GuildConfig, LeaderboardEntry, LeaderboardPeriod, QUEUE_FILTERS, RegisteredPlayer
 from .riot_api import RiotAPIClient, RiotAPIError
 from .storage import Storage
 
 
 LOGGER = logging.getLogger(__name__)
-
-
-class QueueTransformer(app_commands.Transformer):
-    async def transform(self, _: discord.Interaction, value: str) -> str:
-        if value not in QUEUE_FILTERS:
-            raise app_commands.AppCommandError(f"Unsupported queue: {value}")
-        return value
 
 
 QUEUE_CHOICES = [
@@ -84,6 +77,7 @@ class OraculoCog(commands.Cog):
     leaderboard_group = app_commands.Group(name="leaderboard", description="Manage and view server leaderboards")
 
     @app_commands.command(name="profile", description="Show your current leaderboard-period stats")
+    @app_commands.guild_only()
     @app_commands.describe(
         game_name="Optional Riot game name override",
         tag_line="Optional Riot tag line override",
@@ -108,16 +102,20 @@ class OraculoCog(commands.Cog):
     ) -> None:
         assert interaction.guild_id is not None
         await interaction.response.defer(thinking=True)
-        player = await self._resolve_player(interaction, game_name, tag_line)
-        stats = await self.bot.leaderboard_service.build_for_player(
-            player=player,
-            queue_key=queue,
-            period=LeaderboardPeriod(period),
-            now=datetime.now(UTC),
-        )
+        try:
+            player = await self._resolve_player(interaction, game_name, tag_line)
+            stats = await self.bot.leaderboard_service.build_for_player(
+                player=player,
+                queue_key=queue,
+                period=LeaderboardPeriod(period),
+                now=datetime.now(UTC),
+            )
+        except RiotAPIError as error:
+            await interaction.followup.send(str(error))
+            return
         label = LeaderboardPeriod(period).value
         message = render_leaderboard(
-            [type("Entry", (), {"player": player, "stats": stats})()],
+            [LeaderboardEntry(player=player, stats=stats)],
             f"{player.riot_id} profile",
             queue,
             label,
@@ -125,6 +123,7 @@ class OraculoCog(commands.Cog):
         await interaction.followup.send(message)
 
     @leaderboard_group.command(name="join", description="Register your Riot account for this server leaderboard")
+    @app_commands.guild_only()
     async def leaderboard_join(self, interaction: discord.Interaction, game_name: str, tag_line: str) -> None:
         assert interaction.guild_id is not None
         await interaction.response.defer(thinking=True, ephemeral=True)
@@ -144,6 +143,7 @@ class OraculoCog(commands.Cog):
         await interaction.followup.send(f"Registered **{player.riot_id}** for this server.", ephemeral=True)
 
     @leaderboard_group.command(name="leave", description="Remove your Riot account from this server leaderboard")
+    @app_commands.guild_only()
     async def leaderboard_leave(self, interaction: discord.Interaction) -> None:
         assert interaction.guild_id is not None
         removed = self.bot.storage.remove_registration(interaction.guild_id, interaction.user.id)
@@ -153,6 +153,7 @@ class OraculoCog(commands.Cog):
         await interaction.response.send_message("You are not registered in this server leaderboard.", ephemeral=True)
 
     @leaderboard_group.command(name="show", description="Show the current server leaderboard")
+    @app_commands.guild_only()
     @app_commands.choices(queue=QUEUE_CHOICES)
     @app_commands.choices(
         period=[
@@ -185,6 +186,7 @@ class OraculoCog(commands.Cog):
         )
 
     @leaderboard_group.command(name="config", description="Configure automatic leaderboard posts")
+    @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.choices(queue=QUEUE_CHOICES)
     @app_commands.choices(
@@ -203,9 +205,10 @@ class OraculoCog(commands.Cog):
     ) -> None:
         assert interaction.guild_id is not None
         current = self.bot.storage.get_guild_config(interaction.guild_id)
+        selected_channel_id = channel.id if channel else current.channel_id or interaction.channel_id
         config = GuildConfig(
             guild_id=interaction.guild_id,
-            channel_id=channel.id if channel else current.channel_id,
+            channel_id=selected_channel_id,
             autopost_period=LeaderboardPeriod(period),
             default_queue=queue,
             last_posted_at=current.last_posted_at,
@@ -234,6 +237,8 @@ class OraculoCog(commands.Cog):
         tag_line: str | None,
     ) -> RegisteredPlayer:
         assert interaction.guild_id is not None
+        if bool(game_name) ^ bool(tag_line):
+            raise RiotAPIError("Provide both game_name and tag_line together, or omit both.")
         if game_name and tag_line:
             account = await self.bot.riot_client.resolve_account(game_name, tag_line)
             return RegisteredPlayer(
