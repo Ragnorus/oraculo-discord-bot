@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oraculo-discord-bot"
+version = "0.1.0"
+description = "Discord bot for Riot-powered player stats and leaderboards"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "aiohttp==3.14.3",
+  "discord.py==2.7.1",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
