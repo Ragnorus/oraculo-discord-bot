@@ -49,16 +49,28 @@ class LeaderboardService:
 
 
 def render_leaderboard(entries: list[LeaderboardEntry], title: str, queue_key: str, period_label: str) -> str:
-    if not entries:
-        return f"**{title}**\nNo matches found for {QUEUE_FILTERS[queue_key]['label']} during {period_label}."
+    queue_label = QUEUE_FILTERS[queue_key]["label"]
+    header = f"**{title}** · {queue_label} · {period_label}"
 
-    lines = [f"**{title}**", f"Queue: {QUEUE_FILTERS[queue_key]['label']}", f"Period: {period_label}", ""]
-    for index, entry in enumerate(entries, start=1):
-        stats = entry.stats
-        lines.append(
-            f"{index}. **{entry.player.riot_id}** — "
-            f"{stats.wins}/{stats.games} wins, "
-            f"{stats.kills}/{stats.deaths}/{stats.assists} KDA, "
-            f"{stats.total_damage} dmg, {stats.gold_earned} gold, {stats.minions_killed} CS"
+    if not entries:
+        return f"{header}\nNo matches found."
+
+    col_player = max(len(e.player.riot_id) for e in entries)
+    col_player = max(col_player, 6)
+
+    # fixed-width table inside a code block for monospace alignment
+    head = (
+        f"{'#':>2}  {'Player':<{col_player}}  {'W/G':<6}  {'K/D/A':<10}  {'DMG':>7}  {'Gold':>6}  {'CS':>4}"
+    )
+    sep = "-" * len(head)
+    rows = [head, sep]
+    for i, entry in enumerate(entries, start=1):
+        s = entry.stats
+        kda = f"{s.kills}/{s.deaths}/{s.assists}"
+        wg = f"{s.wins}/{s.games}"
+        rows.append(
+            f"{i:>2}  {entry.player.riot_id:<{col_player}}  {wg:<6}  {kda:<10}  {s.total_damage:>7}  {s.gold_earned:>6}  {s.minions_killed:>4}"
         )
-    return "\n".join(lines)
+
+    table = "```\n" + "\n".join(rows) + "\n```"
+    return f"{header}\n{table}"
