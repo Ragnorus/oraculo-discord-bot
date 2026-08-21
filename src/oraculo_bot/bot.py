@@ -156,6 +156,51 @@ class OraculoCog(commands.Cog):
             return
         await interaction.response.send_message("You are not registered in this server leaderboard.", ephemeral=True)
 
+    @leaderboard_group.command(name="add", description="Register another member's Riot account (admin only)")
+    @app_commands.guild_only()
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def leaderboard_add(self, interaction: discord.Interaction, member: discord.Member, game_name: str, tag_line: str) -> None:
+        assert interaction.guild_id is not None
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        try:
+            account = await self.bot.riot_client.resolve_account(game_name, tag_line)
+        except RiotAPIError as error:
+            await interaction.followup.send(str(error), ephemeral=True)
+            return
+        player = RegisteredPlayer(
+            discord_user_id=member.id,
+            game_name=account.game_name,
+            tag_line=account.tag_line,
+            puuid=account.puuid,
+        )
+        self.bot.storage.set_registration(interaction.guild_id, player)
+        await interaction.followup.send(f"Registered **{player.riot_id}** for {member.mention}.", ephemeral=True)
+
+    @leaderboard_add.error
+    async def leaderboard_add_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
+        if isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message("You need Manage Server to add members.", ephemeral=True)
+            return
+        raise error
+
+    @leaderboard_group.command(name="remove", description="Remove another member from the leaderboard (admin only)")
+    @app_commands.guild_only()
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def leaderboard_remove(self, interaction: discord.Interaction, member: discord.Member) -> None:
+        assert interaction.guild_id is not None
+        removed = self.bot.storage.remove_registration(interaction.guild_id, member.id)
+        if removed:
+            await interaction.response.send_message(f"Removed {member.mention} from the leaderboard.", ephemeral=True)
+            return
+        await interaction.response.send_message(f"{member.mention} is not registered in this server leaderboard.", ephemeral=True)
+
+    @leaderboard_remove.error
+    async def leaderboard_remove_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
+        if isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message("You need Manage Server to remove members.", ephemeral=True)
+            return
+        raise error
+
     @leaderboard_group.command(name="show", description="Show the current server leaderboard")
     @app_commands.guild_only()
     @app_commands.choices(queue=QUEUE_CHOICES)
