@@ -1,11 +1,9 @@
 {
   "$schema": "https://schema.railpack.com",
-  "steps": {
-    "install": {
-      "commands": ["...", "pip install ."]
-    }
-  },
   "deploy": {
-    "startCommand": "python -m oraculo_bot"
+    "startCommand": "python -m oraculo_bot",
+    "variables": {
+      "PYTHONPATH": "/app/src"
+    }
   }
 }
