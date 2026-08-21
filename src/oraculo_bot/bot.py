@@ -80,6 +80,30 @@ class OraculoCog(commands.Cog):
 
     leaderboard_group = app_commands.Group(name="leaderboard", description="Manage and view server leaderboards")
 
+    @app_commands.command(name="help", description="Show how to use Oráculo")
+    async def help_command(self, interaction: discord.Interaction) -> None:
+        embed = discord.Embed(title="Oráculo — Bot Guide", color=0x7B56F3)
+        embed.add_field(name="Registration", value=(
+            "`/leaderboard join game_name tag_line` — Register your Riot account\n"
+            "`/leaderboard leave` — Remove your registration\n"
+            "`/leaderboard add @member game_name tag_line` — Register someone *(admin)*\n"
+            "`/leaderboard remove @member` — Remove someone *(admin)*"
+        ), inline=False)
+        embed.add_field(name="Viewing Stats", value=(
+            "`/profile` — Your stats for the current period\n"
+            "`/profile game_name tag_line` — Stats for any Riot account\n"
+            "`/leaderboard show` — Full server leaderboard\n"
+            "`/leaderboard show queue:aram period:Weekly` — Filtered view"
+        ), inline=False)
+        embed.add_field(name="Admin", value=(
+            "`/leaderboard config` — Set auto-post channel, queue, and period\n"
+            "*Requires Manage Server permission.*"
+        ), inline=False)
+        embed.add_field(name="Queue Options", value="All · ARAM · Normal · Ranked Solo/Duo · Ranked Flex · Arena · URF", inline=False)
+        embed.add_field(name="Period Options", value="Daily · Weekly · Yearly", inline=False)
+        embed.set_footer(text="game_name#tag_line is your Riot ID shown in the Riot client")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
     @app_commands.command(name="profile", description="Show your current leaderboard-period stats")
     @app_commands.guild_only()
     @app_commands.describe(
