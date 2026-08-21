@@ -231,9 +231,6 @@ class OraculoCog(commands.Cog):
             return
         raise error
 
-    async def cog_load(self) -> None:
-        self.bot.tree.add_command(self.leaderboard_group)
-
     async def _resolve_player(
         self,
         interaction: discord.Interaction,
