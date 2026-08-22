@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+import io
 import logging
 
 import discord
@@ -10,6 +11,7 @@ from discord.ext import commands, tasks
 
 from .chart_server import ChartServer
 from .config import BotSettings, load_settings
+from .gif_renderer import render_race_gif
 from .leaderboard import LeaderboardService, render_leaderboard
 from .models import GuildConfig, LeaderboardEntry, LeaderboardPeriod, QUEUE_FILTERS, RegisteredPlayer
 from .riot_api import RiotAPIClient, RiotAPIError
@@ -172,10 +174,21 @@ class OraculoCog(commands.Cog):
         )
         token = self.bot.chart_server.store_chart(generate_chart_html(payload))
         url = f"{self.bot.settings.public_url.rstrip('/')}/chart/{token}"
-        await interaction.followup.send(
+        message = (
             f"📊 **{interaction.guild.name} Performance Race** · {QUEUE_FILTERS[queue]['label']} · {period}\n"
-            f"{url}\n*Link expires in 1 hour.*"
+            f"{url}\n*Interactive link expires in 1 hour.*"
         )
+        try:
+            gif_bytes = await asyncio.to_thread(render_race_gif, payload)
+            if len(gif_bytes) > 8_000_000:
+                raise ValueError("Generated GIF is too large to upload.")
+            await interaction.followup.send(
+                message,
+                file=discord.File(io.BytesIO(gif_bytes), filename="performance-race.gif"),
+            )
+        except (OSError, ValueError) as error:
+            LOGGER.warning("Race GIF generation failed: %s", error)
+            await interaction.followup.send(message + "\n*GIF preview was unavailable; use the interactive link.*")
 
     @app_commands.command(name="profile", description="Show your current leaderboard-period stats")
     @app_commands.guild_only()
