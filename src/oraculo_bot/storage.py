@@ -17,12 +17,14 @@ class Storage:
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def _empty_payload(self) -> dict[str, Any]:
-        return {"guilds": {}, "registrations": {}}
+        return {"guilds": {}, "registrations": {}, "riot_cache": {"players": {}}}
 
     def load(self) -> dict[str, Any]:
         if not self.path.exists():
             return self._empty_payload()
-        return json.loads(self.path.read_text(encoding="utf-8"))
+        payload = json.loads(self.path.read_text(encoding="utf-8"))
+        payload.setdefault("riot_cache", {}).setdefault("players", {})
+        return payload
 
     def save(self, payload: dict[str, Any]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -82,3 +84,11 @@ class Storage:
         payload = self.load()
         guild_entries = payload["registrations"].get(str(guild_id), {})
         return [RegisteredPlayer(**value) for value in guild_entries.values()]
+
+    def get_riot_cache(self, key: str) -> dict[str, Any] | None:
+        return self.load()["riot_cache"]["players"].get(key)
+
+    def set_riot_cache(self, key: str, value: dict[str, Any]) -> None:
+        payload = self.load()
+        payload["riot_cache"]["players"][key] = value
+        self.save(payload)

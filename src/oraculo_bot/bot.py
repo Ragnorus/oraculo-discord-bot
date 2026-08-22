@@ -413,13 +413,16 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
     settings = load_settings()
     chart_server = ChartServer(settings.chart_port)
+    storage = Storage(settings.data_path)
     bot = OraculoBot(
         settings=settings,
-        storage=Storage(settings.data_path),
+        storage=storage,
         riot_client=RiotAPIClient(
             api_key=settings.riot_api_key,
             account_region=settings.riot_account_region,
             platform_region=settings.riot_platform_region,
+            storage=storage,
+            cache_ttl_seconds=settings.riot_cache_ttl_seconds,
         ),
         chart_server=chart_server,
     )

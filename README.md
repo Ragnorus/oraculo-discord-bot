@@ -32,6 +32,7 @@ Set these environment variables before starting the bot:
 - `RIOT_PLATFORM_REGION` (default: `na1`)
 - `ORACULO_DATA_PATH` (default: `data/oraculo.json`)
 - `ORACULO_SCHEDULER_INTERVAL_MINUTES` (default: `30`)
+- `ORACULO_RIOT_CACHE_TTL_SECONDS` (default: `300`; minimum: `1`)
 
 ## Run locally
 

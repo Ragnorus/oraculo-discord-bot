@@ -15,6 +15,7 @@ class BotSettings:
     scheduler_interval_minutes: int
     chart_port: int
     public_url: str | None
+    riot_cache_ttl_seconds: int
 
 
 def load_settings() -> BotSettings:
@@ -27,6 +28,7 @@ def load_settings() -> BotSettings:
 
     data_path = Path(os.getenv("ORACULO_DATA_PATH", "data/oraculo.json")).expanduser()
     scheduler_interval = int(os.getenv("ORACULO_SCHEDULER_INTERVAL_MINUTES", "30"))
+    cache_ttl = max(int(os.getenv("ORACULO_RIOT_CACHE_TTL_SECONDS", "300")), 1)
 
     return BotSettings(
         discord_token=discord_token,
@@ -37,4 +39,5 @@ def load_settings() -> BotSettings:
         scheduler_interval_minutes=max(scheduler_interval, 5),
         chart_port=int(os.getenv("ORACULO_CHART_PORT", "8080")),
         public_url=os.getenv("ORACULO_PUBLIC_URL", "").strip() or None,
+        riot_cache_ttl_seconds=cache_ttl,
     )
