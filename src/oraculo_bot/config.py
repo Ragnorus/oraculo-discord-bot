@@ -6,7 +6,9 @@ import os
 
 
 def _normalize_riot_api_key(raw_value: str) -> str:
-    token = raw_value.strip().strip("'\"")
+    token = raw_value.strip()
+    if len(token) >= 2 and token[0] == token[-1] and token[0] in {"'", '"'}:
+        token = token[1:-1].strip()
     if token.lower().startswith("bearer "):
         token = token[7:].strip()
     return token
