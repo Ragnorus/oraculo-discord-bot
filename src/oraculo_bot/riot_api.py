@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -41,13 +42,16 @@ class RiotAPIClient:
         if self._session and not self._session.closed:
             await self._session.close()
 
-    async def _request_json(self, url: str, params: dict[str, Any] | None = None) -> Any:
+    async def _request_json(self, url: str, params: dict[str, Any] | None = None, _retries: int = 3) -> Any:
         session = await self.session()
         async with session.get(url, params=params) as response:
             if response.status == 404:
                 raise RiotAPIError("Riot account or match data was not found.")
             if response.status == 429:
-                retry_after = response.headers.get("Retry-After", "unknown")
+                retry_after = int(response.headers.get("Retry-After", "1"))
+                if _retries > 0:
+                    await asyncio.sleep(retry_after + 0.5)
+                    return await self._request_json(url, params, _retries - 1)
                 raise RiotAPIError(f"Riot API rate limit exceeded. Retry after {retry_after} seconds.")
             if response.status >= 400:
                 detail = await response.text()
@@ -106,6 +110,7 @@ class RiotAPIClient:
         stats = PlayerStats()
         for match_id in await self.fetch_match_ids(puuid, start, end):
             payload = await self.fetch_match(match_id)
+            await asyncio.sleep(0.05)  # ~20 req/sec to stay within rate limits
             info = payload.get("info", {})
             if allowed_queue_ids and info.get("queueId") not in allowed_queue_ids:
                 continue
