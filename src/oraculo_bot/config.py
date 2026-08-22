@@ -5,6 +5,13 @@ from pathlib import Path
 import os
 
 
+def _normalize_riot_api_key(raw_value: str) -> str:
+    token = raw_value.strip().strip("'\"")
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
+    return token
+
+
 @dataclass(slots=True)
 class BotSettings:
     discord_token: str
@@ -20,7 +27,7 @@ class BotSettings:
 
 def load_settings() -> BotSettings:
     discord_token = os.getenv("DISCORD_BOT_TOKEN", "").strip()
-    riot_api_key = os.getenv("RIOT_API_KEY", "").strip()
+    riot_api_key = _normalize_riot_api_key(os.getenv("RIOT_API_KEY", ""))
     if not discord_token:
         raise ValueError("DISCORD_BOT_TOKEN is required")
     if not riot_api_key:

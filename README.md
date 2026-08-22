@@ -27,7 +27,7 @@ Oráculo is a Python Discord bot that pulls player and match data from the Riot 
 Set these environment variables before starting the bot:
 
 - `DISCORD_BOT_TOKEN`
-- `RIOT_API_KEY`
+- `RIOT_API_KEY` (raw key value only; surrounding quotes and `****** prefix are ignored)
 - `RIOT_ACCOUNT_REGION` (default: `americas`)
 - `RIOT_PLATFORM_REGION` (default: `na1`)
 - `ORACULO_DATA_PATH` (default: `data/oraculo.json`)
