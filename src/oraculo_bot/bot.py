@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 import logging
 
@@ -7,11 +8,13 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
+from .chart_server import ChartServer
 from .config import BotSettings, load_settings
 from .leaderboard import LeaderboardService, render_leaderboard
 from .models import GuildConfig, LeaderboardEntry, LeaderboardPeriod, QUEUE_FILTERS, RegisteredPlayer
 from .riot_api import RiotAPIClient, RiotAPIError
 from .storage import Storage
+from .visualize_chart import build_race_payload, compute_checkpoints, generate_chart_html, performance_score
 
 
 LOGGER = logging.getLogger(__name__)
@@ -28,13 +31,14 @@ QUEUE_CHOICES = [
 
 
 class OraculoBot(commands.Bot):
-    def __init__(self, settings: BotSettings, storage: Storage, riot_client: RiotAPIClient) -> None:
+    def __init__(self, settings: BotSettings, storage: Storage, riot_client: RiotAPIClient, chart_server: ChartServer) -> None:
         intents = discord.Intents.default()
         super().__init__(command_prefix="!", intents=intents)
         self.settings = settings
         self.storage = storage
         self.riot_client = riot_client
         self.leaderboard_service = LeaderboardService(riot_client)
+        self.chart_server = chart_server
 
     async def setup_hook(self) -> None:
         await self.add_cog(OraculoCog(self))
@@ -103,6 +107,75 @@ class OraculoCog(commands.Cog):
         embed.add_field(name="Period Options", value="Daily · Weekly · Yearly", inline=False)
         embed.set_footer(text="game_name#tag_line is your Riot ID shown in the Riot client")
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(name="race", description="Animated bar chart race of player performance scores")
+    @app_commands.guild_only()
+    @app_commands.choices(queue=QUEUE_CHOICES)
+    @app_commands.choices(
+        period=[
+            app_commands.Choice(name="Weekly", value="weekly"),
+            app_commands.Choice(name="Monthly", value="monthly"),
+            app_commands.Choice(name="Yearly", value="yearly"),
+        ]
+    )
+    async def race_command(
+        self,
+        interaction: discord.Interaction,
+        queue: str = "all",
+        period: str = "weekly",
+    ) -> None:
+        assert interaction.guild_id is not None
+        if not self.bot.settings.public_url:
+            await interaction.response.send_message(
+                "The `ORACULO_PUBLIC_URL` environment variable is not set. "
+                "Ask the bot admin to add it in Railway → Variables (e.g. `https://your-app.up.railway.app`).",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.defer(thinking=True)
+        players = self.bot.storage.list_registrations(interaction.guild_id)
+        if not players:
+            await interaction.followup.send("No players are registered in this server leaderboard yet.")
+            return
+        period_enum = LeaderboardPeriod(period)
+        now = datetime.now(UTC)
+        start, end = period_enum.current_window(now)
+        checkpoints = compute_checkpoints(start, end, period)
+        semaphore = asyncio.Semaphore(4)
+
+        async def _scores(player: RegisteredPlayer) -> tuple[str, list[tuple[datetime, float]]]:
+            async with semaphore:
+                stats_list = await self.bot.riot_client.aggregate_stats_at_checkpoints(
+                    player.puuid, start, end, checkpoints, queue
+                )
+                return player.riot_id, [(checkpoints[i], performance_score(s)) for i, s in enumerate(stats_list)]
+
+        results = await asyncio.gather(*(_scores(p) for p in players), return_exceptions=True)
+        player_scores: dict[str, list[tuple[datetime, float]]] = {}
+        for result in results:
+            if isinstance(result, Exception):
+                LOGGER.warning("Race fetch error: %s", result)
+                continue
+            name, scores = result
+            if any(v > 0 for _, v in scores):
+                player_scores[name] = scores
+
+        if not player_scores:
+            await interaction.followup.send("No match data found for the selected period and queue.")
+            return
+
+        payload = build_race_payload(
+            player_scores,
+            f"{interaction.guild.name} Performance Race",
+            QUEUE_FILTERS[queue]["label"],
+            period,
+        )
+        token = self.bot.chart_server.store_chart(generate_chart_html(payload))
+        url = f"{self.bot.settings.public_url.rstrip('/')}/chart/{token}"
+        await interaction.followup.send(
+            f"📊 **{interaction.guild.name} Performance Race** · {QUEUE_FILTERS[queue]['label']} · {period}\n"
+            f"{url}\n*Link expires in 1 hour.*"
+        )
 
     @app_commands.command(name="profile", description="Show your current leaderboard-period stats")
     @app_commands.guild_only()
@@ -326,6 +399,7 @@ class OraculoCog(commands.Cog):
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
     settings = load_settings()
+    chart_server = ChartServer(settings.chart_port)
     bot = OraculoBot(
         settings=settings,
         storage=Storage(settings.data_path),
@@ -334,5 +408,18 @@ def main() -> None:
             account_region=settings.riot_account_region,
             platform_region=settings.riot_platform_region,
         ),
+        chart_server=chart_server,
     )
-    bot.run(settings.discord_token)
+
+    async def _run_all() -> None:
+        await chart_server.start()
+        try:
+            async with bot:
+                await bot.start(settings.discord_token)
+        finally:
+            await chart_server.stop()
+
+    try:
+        asyncio.run(_run_all())
+    except KeyboardInterrupt:
+        pass

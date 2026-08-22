@@ -13,6 +13,8 @@ class BotSettings:
     riot_platform_region: str
     data_path: Path
     scheduler_interval_minutes: int
+    chart_port: int
+    public_url: str | None
 
 
 def load_settings() -> BotSettings:
@@ -33,4 +35,6 @@ def load_settings() -> BotSettings:
         riot_platform_region=os.getenv("RIOT_PLATFORM_REGION", "na1"),
         data_path=data_path,
         scheduler_interval_minutes=max(scheduler_interval, 5),
+        chart_port=int(os.getenv("ORACULO_CHART_PORT", "8080")),
+        public_url=os.getenv("ORACULO_PUBLIC_URL", "").strip() or None,
     )

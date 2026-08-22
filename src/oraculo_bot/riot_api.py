@@ -121,3 +121,47 @@ class RiotAPIClient:
             if participant:
                 stats.merge(participant)
         return stats
+
+    async def aggregate_stats_at_checkpoints(
+        self,
+        puuid: str,
+        start: datetime,
+        end: datetime,
+        checkpoints: list[datetime],
+        queue_key: str,
+    ) -> list[PlayerStats]:
+        """Fetch all matches once, then return cumulative PlayerStats at each checkpoint."""
+        allowed_queue_ids = QUEUE_FILTERS[queue_key]["queue_ids"]
+        match_ids = await self.fetch_match_ids(puuid, start, end)
+
+        # Collect (end_timestamp_ms, participant) for qualifying matches
+        timestamped: list[tuple[int, dict]] = []
+        for match_id in match_ids:
+            payload = await self.fetch_match(match_id)
+            await asyncio.sleep(0.05)  # ~20 req/sec to stay within rate limits
+            info = payload.get("info", {})
+            if allowed_queue_ids and info.get("queueId") not in allowed_queue_ids:
+                continue
+            participant = next(
+                (e for e in info.get("participants", []) if e.get("puuid") == puuid),
+                None,
+            )
+            if participant is None:
+                continue
+            game_end_ms: int = info.get("gameEndTimestamp") or (
+                info.get("gameCreation", 0) + info.get("gameDuration", 0) * 1000
+            )
+            timestamped.append((game_end_ms, participant))
+
+        timestamped.sort(key=lambda x: x[0])
+
+        result: list[PlayerStats] = []
+        for checkpoint in checkpoints:
+            cutoff_ms = int(checkpoint.astimezone(UTC).timestamp() * 1000)
+            stats = PlayerStats()
+            for game_end_ms, participant in timestamped:
+                if game_end_ms <= cutoff_ms:
+                    stats.merge(participant)
+            result.append(stats)
+        return result
+

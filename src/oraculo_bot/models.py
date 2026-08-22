@@ -19,6 +19,7 @@ def ensure_utc(value: datetime) -> datetime:
 class LeaderboardPeriod(str, Enum):
     DAILY = "daily"
     WEEKLY = "weekly"
+    MONTHLY = "monthly"
     YEARLY = "yearly"
 
     def current_window(self, now: datetime) -> tuple[datetime, datetime]:
@@ -27,6 +28,8 @@ class LeaderboardPeriod(str, Enum):
             start = datetime(now.year, now.month, now.day, tzinfo=UTC)
         elif self is LeaderboardPeriod.WEEKLY:
             start = datetime(now.year, now.month, now.day, tzinfo=UTC) - timedelta(days=now.weekday())
+        elif self is LeaderboardPeriod.MONTHLY:
+            start = datetime(now.year, now.month, 1, tzinfo=UTC)
         else:
             start = datetime(now.year, 1, 1, tzinfo=UTC)
         return start, now
@@ -37,6 +40,12 @@ class LeaderboardPeriod(str, Enum):
             previous_start = start - timedelta(days=1)
         elif self is LeaderboardPeriod.WEEKLY:
             previous_start = start - timedelta(days=7)
+        elif self is LeaderboardPeriod.MONTHLY:
+            previous_start = (
+                datetime(start.year - 1, 12, 1, tzinfo=UTC)
+                if start.month == 1
+                else datetime(start.year, start.month - 1, 1, tzinfo=UTC)
+            )
         else:
             previous_start = datetime(start.year - 1, 1, 1, tzinfo=UTC)
         return previous_start, start
