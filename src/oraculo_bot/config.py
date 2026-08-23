@@ -1,16 +1,31 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 import os
 
 
+LOGGER = logging.getLogger(__name__)
+
+_QUOTES = {"'", '"'}
+
+
+def _strip_surrounding_quotes(token: str) -> str:
+    if len(token) >= 2 and token[0] == token[-1] and token[0] in _QUOTES:
+        return token[1:-1]
+    return token
+
+
 def _normalize_riot_api_key(raw_value: str) -> str:
     token = raw_value.strip()
-    if len(token) >= 2 and token[0] == token[-1] and token[0] in {"'", '"'}:
-        token = token[1:-1].strip()
+    # Strip surrounding quotes first (e.g. "RGAPI-xxx" or 'RGAPI-xxx')
+    token = _strip_surrounding_quotes(token).strip()
+    # Strip bearer prefix (case-insensitive), e.g. bearer RGAPI-xxx or bearer 'RGAPI-xxx'
     if token.lower().startswith("bearer "):
         token = token[7:].strip()
+        # Strip quotes that may have been wrapped around the key after the bearer prefix
+        token = _strip_surrounding_quotes(token).strip()
     return token
 
 
@@ -34,6 +49,8 @@ def load_settings() -> BotSettings:
         raise ValueError("DISCORD_BOT_TOKEN is required")
     if not riot_api_key:
         raise ValueError("RIOT_API_KEY is required")
+
+    LOGGER.info("Riot API key loaded: length=%d", len(riot_api_key))
 
     data_path = Path(os.getenv("ORACULO_DATA_PATH", "data/oraculo.json")).expanduser()
     scheduler_interval = int(os.getenv("ORACULO_SCHEDULER_INTERVAL_MINUTES", "30"))
