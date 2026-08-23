@@ -31,6 +31,28 @@ class ConfigTest(unittest.TestCase):
 
         self.assertEqual("abc123", settings.riot_api_key)
 
+    def test_load_settings_removes_bearer_prefix_with_quoted_key(self) -> None:
+        env = {
+            "DISCORD_BOT_TOKEN": "discord-token",
+            "RIOT_API_KEY": 'Bearer "abc123"',
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            settings = load_settings()
+
+        self.assertEqual("abc123", settings.riot_api_key)
+
+    def test_load_settings_removes_bearer_prefix_with_single_quoted_key(self) -> None:
+        env = {
+            "DISCORD_BOT_TOKEN": "discord-token",
+            "RIOT_API_KEY": "Bearer 'abc123'",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            settings = load_settings()
+
+        self.assertEqual("abc123", settings.riot_api_key)
+
     def test_load_settings_requires_riot_api_key_after_normalization(self) -> None:
         env = {
             "DISCORD_BOT_TOKEN": "discord-token",
