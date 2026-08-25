@@ -46,6 +46,11 @@ class OraculoBot(commands.Bot):
         await self.add_cog(OraculoCog(self))
         self.autopost_loop.change_interval(minutes=self.settings.scheduler_interval_minutes)
         self.autopost_loop.start()
+        if self.settings.dev_guild_id:
+            # Guild-scoped syncs apply instantly, unlike global syncs which can take up to an hour.
+            guild = discord.Object(id=self.settings.dev_guild_id)
+            self.tree.copy_global_to(guild=guild)
+            await self.tree.sync(guild=guild)
         await self.tree.sync()
 
     async def close(self) -> None:

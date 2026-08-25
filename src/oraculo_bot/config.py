@@ -40,6 +40,7 @@ class BotSettings:
     chart_port: int
     public_url: str | None
     riot_cache_ttl_seconds: int
+    dev_guild_id: int | None
 
 
 def load_settings() -> BotSettings:
@@ -55,6 +56,8 @@ def load_settings() -> BotSettings:
     data_path = Path(os.getenv("ORACULO_DATA_PATH", "data/oraculo.json")).expanduser()
     scheduler_interval = int(os.getenv("ORACULO_SCHEDULER_INTERVAL_MINUTES", "30"))
     cache_ttl = max(int(os.getenv("ORACULO_RIOT_CACHE_TTL_SECONDS", "300")), 1)
+    dev_guild_id_raw = os.getenv("ORACULO_DEV_GUILD_ID", "").strip()
+    dev_guild_id = int(dev_guild_id_raw) if dev_guild_id_raw else None
 
     return BotSettings(
         discord_token=discord_token,
@@ -66,4 +69,5 @@ def load_settings() -> BotSettings:
         chart_port=int(os.getenv("ORACULO_CHART_PORT", "8080")),
         public_url=os.getenv("ORACULO_PUBLIC_URL", "").strip() or None,
         riot_cache_ttl_seconds=cache_ttl,
+        dev_guild_id=dev_guild_id,
     )
