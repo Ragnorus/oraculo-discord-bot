@@ -33,18 +33,24 @@ class LeaderboardService:
     ) -> list[LeaderboardEntry]:
         semaphore = asyncio.Semaphore(4)
 
-        async def compute(player: RegisteredPlayer) -> LeaderboardEntry | None:
+        async def compute(player: RegisteredPlayer) -> LeaderboardEntry | RiotAPIError:
             async with semaphore:
                 try:
                     stats = await self.riot_client.aggregate_player_stats(player.puuid, start, end, queue_key)
                 except RiotAPIError as error:
                     LOGGER.warning("Skipping %s in leaderboard: %s", player.riot_id, error)
-                    return None
+                    return error
                 return LeaderboardEntry(player=player, stats=stats)
 
-        entries = await asyncio.gather(*(compute(player) for player in players))
+        results = await asyncio.gather(*(compute(player) for player in players))
+        entries = [result for result in results if isinstance(result, LeaderboardEntry)]
+        errors = [result for result in results if isinstance(result, RiotAPIError)]
+        if not entries and errors:
+            # every player failed (e.g. an expired/invalid API key) -- surface the real error
+            # instead of silently reporting an empty leaderboard.
+            raise errors[0]
         return sorted(
-            [entry for entry in entries if entry is not None and entry.stats.games > 0],
+            [entry for entry in entries if entry.stats.games > 0],
             key=sort_key,
             reverse=True,
         )
