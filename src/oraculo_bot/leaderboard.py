@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+import logging
 
 from .models import LeaderboardEntry, LeaderboardPeriod, PlayerStats, QUEUE_FILTERS, RegisteredPlayer
-from .riot_api import RiotAPIClient
+from .riot_api import RiotAPIClient, RiotAPIError
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def sort_key(entry: LeaderboardEntry) -> tuple[int, int, int, int]:
@@ -29,13 +33,21 @@ class LeaderboardService:
     ) -> list[LeaderboardEntry]:
         semaphore = asyncio.Semaphore(4)
 
-        async def compute(player: RegisteredPlayer) -> LeaderboardEntry:
+        async def compute(player: RegisteredPlayer) -> LeaderboardEntry | None:
             async with semaphore:
-                stats = await self.riot_client.aggregate_player_stats(player.puuid, start, end, queue_key)
+                try:
+                    stats = await self.riot_client.aggregate_player_stats(player.puuid, start, end, queue_key)
+                except RiotAPIError as error:
+                    LOGGER.warning("Skipping %s in leaderboard: %s", player.riot_id, error)
+                    return None
                 return LeaderboardEntry(player=player, stats=stats)
 
         entries = await asyncio.gather(*(compute(player) for player in players))
-        return sorted([entry for entry in entries if entry.stats.games > 0], key=sort_key, reverse=True)
+        return sorted(
+            [entry for entry in entries if entry is not None and entry.stats.games > 0],
+            key=sort_key,
+            reverse=True,
+        )
 
     async def build_for_player(
         self,
