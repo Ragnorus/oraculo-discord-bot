@@ -103,6 +103,7 @@ class OraculoCog(commands.Cog):
         ), inline=False)
         embed.add_field(name="Admin", value=(
             "`/leaderboard config` — Set auto-post channel, queue, and period\n"
+            "`/leaderboard list` — View all registered members\n"
             "*Requires Manage Server permission.*"
         ), inline=False)
         embed.add_field(name="Queue Options", value="All · ARAM · Normal · Ranked Solo/Duo · Ranked Flex · Arena · URF", inline=False)
@@ -308,6 +309,34 @@ class OraculoCog(commands.Cog):
     async def leaderboard_remove_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
         if isinstance(error, app_commands.MissingPermissions):
             await interaction.response.send_message("You need Manage Server to remove members.", ephemeral=True)
+            return
+        raise error
+
+    @leaderboard_group.command(name="list", description="List all registered members (admin only)")
+    @app_commands.guild_only()
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def leaderboard_list(self, interaction: discord.Interaction) -> None:
+        assert interaction.guild_id is not None
+        players = self.bot.storage.list_registrations(interaction.guild_id)
+        if not players:
+            await interaction.response.send_message("No players are registered in this server leaderboard yet.", ephemeral=True)
+            return
+        lines = []
+        for player in players:
+            member = interaction.guild.get_member(player.discord_user_id) if interaction.guild else None
+            mention = member.mention if member else f"<@{player.discord_user_id}>"
+            lines.append(f"{mention} — **{player.riot_id}**")
+        embed = discord.Embed(
+            title=f"{interaction.guild.name} — Registered Players ({len(players)})",
+            description="\n".join(lines),
+            color=0x7B56F3,
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @leaderboard_list.error
+    async def leaderboard_list_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
+        if isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message("You need Manage Server to list members.", ephemeral=True)
             return
         raise error
 
