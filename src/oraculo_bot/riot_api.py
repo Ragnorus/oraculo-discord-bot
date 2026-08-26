@@ -75,6 +75,11 @@ class RiotAPIClient:
             return await response.json()
 
     async def resolve_account(self, game_name: str, tag_line: str) -> RiotAccount:
+        # Riot IDs are shown as "name#tag" in-game, so users often paste the tag with its leading "#".
+        game_name = game_name.strip().lstrip("#").strip()
+        tag_line = tag_line.strip().lstrip("#").strip()
+        if not game_name or not tag_line:
+            raise RiotAPIError("Riot ID must include both a game name and a tag line, e.g. Player#TAG.")
         url = (
             f"https://{self.account_region}.api.riotgames.com/riot/account/v1/accounts"
             f"/by-riot-id/{quote(game_name)}/{quote(tag_line)}"
