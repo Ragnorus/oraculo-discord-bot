@@ -109,6 +109,7 @@ class OraculoCog(commands.Cog):
         embed.add_field(name="Admin", value=(
             "`/leaderboard config` — Set auto-post channel, queue, and period\n"
             "`/leaderboard list` — View all registered members\n"
+            "`/leaderboard clear confirm:True` — Remove all registered members\n"
             "*Requires Manage Server permission.*"
         ), inline=False)
         embed.add_field(name="Queue Options", value="All · ARAM · Normal · Ranked Solo/Duo · Ranked Flex · Arena · URF", inline=False)
@@ -342,6 +343,31 @@ class OraculoCog(commands.Cog):
     async def leaderboard_list_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
         if isinstance(error, app_commands.MissingPermissions):
             await interaction.response.send_message("You need Manage Server to list members.", ephemeral=True)
+            return
+        raise error
+
+    @leaderboard_group.command(name="clear", description="Remove every registered member from this server (admin only)")
+    @app_commands.guild_only()
+    @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.describe(confirm="Set to True to confirm you want to remove every registered member")
+    async def leaderboard_clear(self, interaction: discord.Interaction, confirm: bool = False) -> None:
+        assert interaction.guild_id is not None
+        if not confirm:
+            await interaction.response.send_message(
+                "This removes every registered member from this server's leaderboard. "
+                "Re-run with `confirm:True` to proceed.",
+                ephemeral=True,
+            )
+            return
+        removed = self.bot.storage.clear_registrations(interaction.guild_id)
+        await interaction.response.send_message(
+            f"Removed {removed} registered member(s) from this server's leaderboard.", ephemeral=True
+        )
+
+    @leaderboard_clear.error
+    async def leaderboard_clear_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
+        if isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message("You need Manage Server to clear members.", ephemeral=True)
             return
         raise error
 

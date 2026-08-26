@@ -85,6 +85,13 @@ class Storage:
         guild_entries = payload["registrations"].get(str(guild_id), {})
         return [RegisteredPlayer(**value) for value in guild_entries.values()]
 
+    def clear_registrations(self, guild_id: int) -> int:
+        payload = self.load()
+        guild_entries = payload["registrations"].pop(str(guild_id), {})
+        if guild_entries:
+            self.save(payload)
+        return len(guild_entries)
+
     def get_riot_cache(self, key: str) -> dict[str, Any] | None:
         return self.load()["riot_cache"]["players"].get(key)
 
