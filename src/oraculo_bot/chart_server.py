@@ -33,7 +33,17 @@ class ChartServer:
         if entry is None or time.monotonic() > entry[1]:
             self._store.pop(token, None)
             raise web.HTTPNotFound(reason="Chart not found or expired.")
-        return web.Response(text=entry[0], content_type="text/html")
+        csp = (
+            "default-src 'none'; "
+            "base-uri 'none'; "
+            "form-action 'none'; "
+            "frame-ancestors 'none'; "
+            "script-src 'self' https://d3js.org 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "connect-src 'none';"
+        )
+        return web.Response(text=entry[0], content_type="text/html", headers={"Content-Security-Policy": csp})
 
     async def start(self) -> None:
         self._runner = web.AppRunner(self._app)
