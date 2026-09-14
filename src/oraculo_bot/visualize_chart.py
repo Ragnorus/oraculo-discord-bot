@@ -120,8 +120,9 @@ button:hover{background:#2d3f55}
     players with more games may score higher.
   </p>
 </details>
+<script id="race-data" type="application/json">__RACE_DATA__</script>
 <script>
-const data = __RACE_DATA__;
+const data = JSON.parse(document.getElementById("race-data").textContent);
 
 document.getElementById("title").textContent = data.title;
 document.getElementById("sub").textContent = data.queue + " · " + data.period;
@@ -262,6 +263,10 @@ if (frames.length > 0) {
 </html>"""
 
 
+def _script_safe_json(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+
+
 def generate_chart_html(payload: dict) -> str:
-    json_data = json.dumps(payload, ensure_ascii=False)
+    json_data = _script_safe_json(payload)
     return _HTML_TEMPLATE.replace("__RACE_DATA__", json_data)
